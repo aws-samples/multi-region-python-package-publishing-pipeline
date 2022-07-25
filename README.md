@@ -2,27 +2,32 @@
 
 This git repository is designed to demonstrate how to build and publish pip packages to CodeArtifact Repositories in Multiple Regions by using CodePipeline and the AWS CDK.
 
-## Architecture
+### Architecture
 
 ![alt text](./Architecture.png)
 
-## Prerequisites
+### Prerequisites
 
 - Have NPM installed
 - Have the AWS CDK CLI installed
 - Have the AWS CLI installed and configured (e.g. profile)
 - Have your AWS Account's regions [bootstrapped](https://docs.aws.amazon.com/cdk/v2/guide/bootstrapping.html) (this sample uses regions `us-east-1` and `us-west-2`)
 
-## Instructions to deploy in your environment:
+## Deployment instructions:
 
-- `git clone <git-remote-repo-location>`
-- `cd <git-repo-name>`
+### Install the CDK Application code
+
+- [Fork the aws-samples/multi-region-python-package-publishing-pipeline/ repository](https://github.com/aws-samples/multi-region-python-package-publishing-pipeline/fork)
+- `git clone git@github.com:<YOUR_GITHUB_USERNAME>/multi-region-python-package-publishing-pipeline.git`
+- `cd multi-region-python-package-publishing-pipeline`
 - `npm i`
-- (Optional) configure the CodeArtifact domainName, repositoryName, primaryRegion, and replicaRegion
+- (Optional) Override default configurations for the CodeArtifact domainName, repositoryName, primaryRegion, and replicaRegion
   - navigate to `./bin/multiregion_package_publishing.ts` and update relevant fields
+
+### Deploy the CDK Application
+
 - `cdk deploy --all`
   - Enter `y` for all prompts
-- `cd ..` to exit out of the CDK directory
 
 ## Investigate what you've built
 
@@ -62,9 +67,8 @@ This is function1
 
 ## Clean Up
 
-- `cd <git-repo-name>`
-- Destory cloud resources `cdk destroy --all`
-- Configure pip to look at the standard pypi repository `pip3 config set global.index-url https://pypi.org/simple`
+- Destory cloud resources by running `cdk destroy --all` from with working directory as `./multi-region-python-package-publishing-pipeline/`
+- Reconfigure pip to look at the standard pypi repository `pip3 config set global.index-url https://pypi.org/simple`
 
 ## Security
 
