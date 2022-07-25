@@ -67,7 +67,7 @@ This is function1
 
 ## Clean Up
 
-- Destory cloud resources by running `cdk destroy --all` from with working directory as `./multi-region-python-package-publishing-pipeline/`
+- Destroy cloud resources by running `cdk destroy --all` from with working directory as `./multi-region-python-package-publishing-pipeline/`
 - Reconfigure pip to look at the standard pypi repository `pip3 config set global.index-url https://pypi.org/simple`
 
 ## Security
