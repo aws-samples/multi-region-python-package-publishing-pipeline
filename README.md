@@ -8,16 +8,17 @@ This git repository is designed to demonstrate how to build and publish pip pack
 
 ### Prerequisites
 
-- Have NPM installed
-- Have the AWS CDK CLI installed
-- Have the AWS CLI installed and configured (e.g. profile)
-- Have your AWS Account's regions [bootstrapped](https://docs.aws.amazon.com/cdk/v2/guide/bootstrapping.html) (this sample uses regions `us-east-1` and `us-west-2`)
+- Have NPM installed (You can download it by [installing Node.js](https://nodejs.org/en/download/))
+- Have the AWS CLI [installed](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) and [configured](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html)
+- Have the AWS CDK [installed](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html#getting_started_install) and your AWS Account [bootstrapped](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html#getting_started_bootstrap) for all regions to be used
+  - This sample uses regions `us-east-1` and `us-west-2`; bootstrap both these regions
+  - Be sure you either have AWS Environment variables set or an AWS CLI profile to [provide CDK your Credentials](https://docs.aws.amazon.com/cdk/v2/guide/cli.html#cli-environment)
 
 ## Deployment instructions:
 
 ### Install the CDK Application code
 
-- [Fork the aws-samples/multi-region-python-package-publishing-pipeline/ repository](https://github.com/aws-samples/multi-region-python-package-publishing-pipeline/fork)
+- [Fork the aws-samples/multi-region-python-package-publishing-pipeline](https://github.com/aws-samples/multi-region-python-package-publishing-pipeline/fork) repository
 - `git clone git@github.com:<YOUR_GITHUB_USERNAME>/multi-region-python-package-publishing-pipeline.git`
 - `cd multi-region-python-package-publishing-pipeline`
 - `npm i`
@@ -26,14 +27,14 @@ This git repository is designed to demonstrate how to build and publish pip pack
 
 ### Deploy the CDK Application
 
-- `cdk deploy --all`
+- `cdk deploy --all` from the app root directory `multi-region-python-package-publishing-pipeline/`
   - Enter `y` for all prompts
 
 ## Investigate what you've built
 
-Look at the CodePipeline that has two stages (Source and Build) and the several actions in the Build Stage (Build Package, Publish Package to Primary Region, Publish Package to Replica Region)
+Look at the CodePipeline that has three stages (Source, Build, and Publish) and the monitor the CodeBuild Projects in the Build/Publish phases while you wait for the pipeline to complete. After ~7 minutes, the pipeline have a status of success
 
-Navigate to the CodeCommit Repository which has the Source Code for your Custom pip Package. Follow the instructions in the CodeCommit [PackageSourceCode Repository's README](./lib/custom-package-source-code/README.md) to add a commit to the `main` branch and trigger the pipeline
+Navigate to the CodeCommit Repository which has the Source Code for your Custom pip Package. Follow the instructions in the CodeCommit `PackageSourceCode` Repository's README (source code originates from [this directory](./lib/custom-package-source-code)) to add a commit to the `main` branch and trigger the pipeline to run again
 
 ## Test an install of the package
 
@@ -67,7 +68,7 @@ This is function1
 
 ## Clean Up
 
-- Destroy cloud resources by running `cdk destroy --all` from with working directory as `./multi-region-python-package-publishing-pipeline/`
+- Destroy cloud resources by running `cdk destroy --all` from the root app directory `multi-region-python-package-publishing-pipeline/`
 - Reconfigure pip to look at the standard pypi repository `pip3 config set global.index-url https://pypi.org/simple`
 
 ## Security
