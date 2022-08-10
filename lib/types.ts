@@ -5,7 +5,7 @@ interface PipelineStackParams {
   domainName: string;
   repositoryName: string;
   primaryRegion: string;
-  replicaRegion: string;
+  replicaRegions: string[];
   accountId: string;
 }
 

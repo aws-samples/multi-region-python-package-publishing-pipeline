@@ -45,24 +45,6 @@ export class MultiRegionPackagePublishingPipelineStack extends Stack {
       },
       this
     );
-    const replicaCodeArtifactRepoArn = Arn.format(
-      {
-        service: 'codeartifact',
-        resource: 'repository',
-        region: params.replicaRegion,
-        resourceName: `${params.domainName}/${params.repositoryName}`,
-      },
-      this
-    );
-    const replicaCodeArtifactDomainArn = Arn.format(
-      {
-        service: 'codeartifact',
-        resource: 'domain',
-        region: params.replicaRegion,
-        resourceName: params.domainName,
-      },
-      this
-    );
     const packageDestinationArn = Arn.format(
       {
         service: 'codeartifact',
@@ -71,15 +53,50 @@ export class MultiRegionPackagePublishingPipelineStack extends Stack {
       },
       this
     );
-    const packageReplicaDestinationArn = Arn.format(
-      {
-        service: 'codeartifact',
-        resource: 'package',
-        resourceName: `${params.domainName}/${params.repositoryName}/*`,
-        region: params.replicaRegion,
-      },
-      this
-    );
+
+    var codeArtifactArns = [
+      primaryCodeArtifactRepoArn,
+      primaryCodeArtifactRepoArn + '/*',
+      primaryCodeArtifactDomainArn,
+      packageDestinationArn,
+    ];
+
+    for (var replicaRegion of params.replicaRegions) {
+      const replicaCodeArtifactRepoArn = Arn.format(
+        {
+          service: 'codeartifact',
+          resource: 'repository',
+          region: replicaRegion,
+          resourceName: `${params.domainName}/${params.repositoryName}`,
+        },
+        this
+      );
+      const replicaCodeArtifactDomainArn = Arn.format(
+        {
+          service: 'codeartifact',
+          resource: 'domain',
+          region: replicaRegion,
+          resourceName: params.domainName,
+        },
+        this
+      );
+      const packageReplicaDestinationArn = Arn.format(
+        {
+          service: 'codeartifact',
+          resource: 'package',
+          resourceName: `${params.domainName}/${params.repositoryName}/*`,
+          region: replicaRegion,
+        },
+        this
+      );
+      const replicaArns = [
+        replicaCodeArtifactRepoArn,
+        replicaCodeArtifactRepoArn + '/*',
+        replicaCodeArtifactDomainArn,
+        packageReplicaDestinationArn,
+      ];
+      replicaArns.map((arn) => codeArtifactArns.push(arn));
+    }
 
     /* 
     Create S3 bucket for storing pipeline artifacts between stages
@@ -236,17 +253,21 @@ export class MultiRegionPackagePublishingPipelineStack extends Stack {
       runOrder: 1,
     });
 
-    const publishReplicaAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'PublishReplicaRegion',
-      project: publishPackageProject,
-      input: buildOutput,
-      environmentVariables: {
-        region: {
-          value: params.replicaRegion,
+    const publishReplicaActions = [];
+    for (var replicaRegion of params.replicaRegions) {
+      const publishReplicaAction = new codepipeline_actions.CodeBuildAction({
+        actionName: `PublishReplicaRegion-${replicaRegion}`,
+        project: publishPackageProject,
+        input: buildOutput,
+        environmentVariables: {
+          region: {
+            value: replicaRegion,
+          },
         },
-      },
-      runOrder: 1,
-    });
+        runOrder: 1,
+      });
+      publishReplicaActions.push(publishReplicaAction);
+    }
 
     //allow the role for this phase's codebuild project to publish to codeartifact
     const CodeArtifactAccessPolicy = new iam.Policy(
@@ -258,16 +279,7 @@ export class MultiRegionPackagePublishingPipelineStack extends Stack {
           new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
             actions: ['codeartifact:*'],
-            resources: [
-              primaryCodeArtifactRepoArn,
-              replicaCodeArtifactRepoArn,
-              primaryCodeArtifactRepoArn + '/*',
-              replicaCodeArtifactRepoArn + '/*',
-              primaryCodeArtifactDomainArn,
-              replicaCodeArtifactDomainArn,
-              packageDestinationArn,
-              packageReplicaDestinationArn,
-            ],
+            resources: codeArtifactArns,
           }),
           new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
@@ -301,7 +313,7 @@ export class MultiRegionPackagePublishingPipelineStack extends Stack {
         },
         {
           stageName: 'Publish',
-          actions: [publishPrimaryAction, publishReplicaAction],
+          actions: [publishPrimaryAction, ...publishReplicaActions],
         },
       ],
     });

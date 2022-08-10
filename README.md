@@ -32,7 +32,7 @@ This git repository is designed to demonstrate how to build and publish pip pack
 
 ## Investigate what you've built
 
-Look at the CodePipeline that has three stages (Source, Build, and Publish) and the monitor the CodeBuild Projects in the Build/Publish phases while you wait for the pipeline to complete. After ~7 minutes, the pipeline have a status of success
+Look at the CodePipeline that has three stages (Source, Build, and Publish) and the monitor the CodeBuild Projects in the Build/Publish phases while you wait for the pipeline to complete. After ~7 minutes, the pipeline should have a status of success
 
 Navigate to the CodeCommit Repository which has the Source Code for your Custom pip Package. Follow the instructions in the CodeCommit `PackageSourceCode` Repository's README (source code originates from [this directory](./lib/custom-package-source-code)) to add a commit to the `main` branch and trigger the pipeline to run again
 

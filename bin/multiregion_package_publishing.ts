@@ -18,7 +18,7 @@ Aspects.of(app).add(new AwsSolutionsChecks({ verbose: true }));
 const domainName = 'custom-package-domain'; //CodeArtifact Domain
 const repositoryName = 'package-artifact-repo'; //CodeArtifact Repository
 const primaryRegion = 'us-east-1'; //Primary CodeArtifact Repo Region
-const replicaRegion = 'us-west-2'; //Replica CodeArtifact Repo Region
+const replicaRegions = ['us-west-2', 'us-east-2']; //Replica CodeArtifact Repo Regions
 
 const artifactParams: CodeArtifactStackParams = {
   domainName,
@@ -27,21 +27,23 @@ const artifactParams: CodeArtifactStackParams = {
 
 const primaryCodeArtifactStack = new CodeArtifactStack(
   app,
-  'CodeArtifactStack',
+  `CodeArtifactPrimaryStack-${primaryRegion}`,
   artifactParams,
   {
     env: { region: primaryRegion },
   }
 );
 
-const replicaCodeArtifactStack = new CodeArtifactStack(
-  app,
-  'CodeArtifactReplicaStack',
-  artifactParams,
-  {
-    env: { region: replicaRegion },
-  }
-);
+for (var replicaRegion of replicaRegions) {
+  const replicaRegionCodeArtifact = new CodeArtifactStack(
+    app,
+    `CodeArtifactReplicaStack-${replicaRegion}`,
+    artifactParams,
+    {
+      env: { region: replicaRegion },
+    }
+  );
+}
 
 const accountId = cdk.Stack.of(primaryCodeArtifactStack).account;
 
@@ -49,7 +51,7 @@ const params: PipelineStackParams = {
   domainName,
   repositoryName,
   primaryRegion,
-  replicaRegion,
+  replicaRegions,
   accountId,
 };
 

@@ -4,20 +4,19 @@
 """A setuptools based setup module.
 See:
 https://packaging.python.org/en/latest/distributing.html
-https://github.com/pypa/sampleproject
 """
 
 from setuptools import setup, find_packages
 
 setup(
-    name='mypippackage',
+    name = 'mypippackage',
 
-    version='1.0.0',
+    version = '1.0.0',
 
-    description='An sample Python package',
-    license='MIT',
+    description = 'An sample Python package',
+    license = 'MIT',
     package_dir = {"": "customPackages"},
     packages = find_packages(where="customPackages"),
-    python_requires= '>=3.6'
+    python_requires = '>=3.6'
 
 )
