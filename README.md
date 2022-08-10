@@ -11,7 +11,7 @@ This git repository is designed to demonstrate how to build and publish pip pack
 - Have NPM installed (You can download it by [installing Node.js](https://nodejs.org/en/download/))
 - Have the AWS CLI [installed](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) and [configured](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html)
 - Have the AWS CDK [installed](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html#getting_started_install) and your AWS Account [bootstrapped](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html#getting_started_bootstrap) for all regions to be used
-  - This sample uses regions `us-east-1` and `us-west-2`; bootstrap both these regions
+  - This sample uses regions `us-east-1`, `us-east-2`, and `us-west-2`; bootstrap both these regions
   - Be sure you either have AWS Environment variables set or an AWS CLI profile to [provide CDK your Credentials](https://docs.aws.amazon.com/cdk/v2/guide/cli.html#cli-environment)
 
 ## Deployment instructions:
