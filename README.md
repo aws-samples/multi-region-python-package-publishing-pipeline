@@ -4,7 +4,7 @@ This git repository is designed to demonstrate how to build and publish pip pack
 
 ### Architecture
 
-![alt text](./Architecture.png)
+![alt text](./Architecture.jpg)
 
 ### Prerequisites
 

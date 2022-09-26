@@ -6,25 +6,26 @@ import { Construct } from 'constructs';
 
 import * as codeartifact from 'aws-cdk-lib/aws-codeartifact';
 
-import { CodeArtifactStackParams } from './types';
+export interface CodeArtifactStackProps extends StackProps {
+  domainName: string;
+  repositoryName: string;
+}
 
+/*
+  Create a stack to create a CodeArtifact Domain and Repository using L1 Constructs
+*/
 export class CodeArtifactStack extends Stack {
   public codeArtifactRepostory: codeartifact.CfnRepository;
   public codeArtifactDomain: codeartifact.CfnDomain;
 
-  constructor(
-    scope: Construct,
-    id: string,
-    params: CodeArtifactStackParams,
-    props?: StackProps
-  ) {
+  constructor(scope: Construct, id: string, props: CodeArtifactStackProps) {
     super(scope, id, props);
 
     const codeArtifactDomain = new codeartifact.CfnDomain(
       this,
       'CodeArtifactDomain',
       {
-        domainName: params.domainName,
+        domainName: props.domainName,
       }
     );
 
@@ -33,7 +34,7 @@ export class CodeArtifactStack extends Stack {
       'CodeArtifactRepo',
       {
         domainName: codeArtifactDomain.domainName,
-        repositoryName: params.repositoryName,
+        repositoryName: props.repositoryName,
       }
     );
 
@@ -43,6 +44,7 @@ export class CodeArtifactStack extends Stack {
       value: codeArtifactRepostory.attrArn,
       exportName: 'CodeArtifactRepoArn',
     });
+
     new CfnOutput(this, 'CodeArtifactDomainArn', {
       value: codeArtifactDomain.attrArn,
       exportName: 'CodeArtifactDomainArn',

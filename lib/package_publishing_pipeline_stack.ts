@@ -13,93 +13,23 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as path from 'path';
 
-import { PipelineStackParams } from './types';
+import { GenerateCodeArtifactArns } from './helpers';
+import { MyNagSuppressions } from './nag_suppressions';
 
-import { NagSuppressions } from 'cdk-nag';
+export interface PublishPipelineStackProps extends StackProps {
+  domainName: string;
+  repositoryName: string;
+  primaryRegion: string;
+  replicaRegions: string[];
+}
 
 export class MultiRegionPackagePublishingPipelineStack extends Stack {
-  constructor(
-    scope: Construct,
-    id: string,
-    params: PipelineStackParams,
-    props?: StackProps
-  ) {
+  constructor(scope: Construct, id: string, props: PublishPipelineStackProps) {
     super(scope, id, props);
+    const accountId = Stack.of(this).account;
 
     /*
-    Derive all necessary Arn's
-    */
-    const primaryCodeArtifactRepoArn = Arn.format(
-      {
-        service: 'codeartifact',
-        resource: 'repository',
-        resourceName: `${params.domainName}/${params.repositoryName}`,
-      },
-      this
-    );
-    const primaryCodeArtifactDomainArn = Arn.format(
-      {
-        service: 'codeartifact',
-        resource: 'domain',
-        resourceName: params.domainName,
-      },
-      this
-    );
-    const packageDestinationArn = Arn.format(
-      {
-        service: 'codeartifact',
-        resource: 'package',
-        resourceName: `${params.domainName}/${params.repositoryName}/*`,
-      },
-      this
-    );
-
-    var codeArtifactArns = [
-      primaryCodeArtifactRepoArn,
-      primaryCodeArtifactRepoArn + '/*',
-      primaryCodeArtifactDomainArn,
-      packageDestinationArn,
-    ];
-
-    for (var replicaRegion of params.replicaRegions) {
-      const replicaCodeArtifactRepoArn = Arn.format(
-        {
-          service: 'codeartifact',
-          resource: 'repository',
-          region: replicaRegion,
-          resourceName: `${params.domainName}/${params.repositoryName}`,
-        },
-        this
-      );
-      const replicaCodeArtifactDomainArn = Arn.format(
-        {
-          service: 'codeartifact',
-          resource: 'domain',
-          region: replicaRegion,
-          resourceName: params.domainName,
-        },
-        this
-      );
-      const packageReplicaDestinationArn = Arn.format(
-        {
-          service: 'codeartifact',
-          resource: 'package',
-          resourceName: `${params.domainName}/${params.repositoryName}/*`,
-          region: replicaRegion,
-        },
-        this
-      );
-      const replicaArns = [
-        replicaCodeArtifactRepoArn,
-        replicaCodeArtifactRepoArn + '/*',
-        replicaCodeArtifactDomainArn,
-        packageReplicaDestinationArn,
-      ];
-      replicaArns.map((arn) => codeArtifactArns.push(arn));
-    }
-
-    /* 
-    Create S3 bucket for storing pipeline artifacts between stages
+    Create encrypted S3 bucket for storing pipeline artifacts between stages (source, build, publish)
     */
     const encryptionKey = new kms.Key(this, 'PipelineArtifactsEncryptionKey', {
       enableKeyRotation: true,
@@ -114,8 +44,17 @@ export class MultiRegionPackagePublishingPipelineStack extends Stack {
     });
 
     /*
-    Create Source Code Git Repository 
-    Create the pipeline's source stage constructs
+    Create blank pipeline using the artifact bucket
+    The pipeline stages are added in the code below
+    */
+    const packagePipeline = new codepipeline.Pipeline(this, 'PackagePipeline', {
+      pipelineName: 'packagePipeline',
+      artifactBucket,
+    });
+
+    /*
+    Create Source Code Git Remote Repository 
+    Add the first commit code base from the /lib/cusotm-package-source-code contents
     */
     const packageSourceRepo = new codecommit.Repository(
       this,
@@ -128,8 +67,11 @@ export class MultiRegionPackagePublishingPipelineStack extends Stack {
       }
     );
 
+    /*
+    Create sourceOutput to track the artifact created by Source Stage
+    Define the buildAction to be from above CodeCommit Source on "main" Branch
+    */
     const sourceOutput = new codepipeline.Artifact();
-
     const sourceAction = new codepipeline_actions.CodeCommitSourceAction({
       actionName: 'CodeCommit',
       repository: packageSourceRepo,
@@ -138,13 +80,26 @@ export class MultiRegionPackagePublishingPipelineStack extends Stack {
     });
 
     /*
-    Create pipeline's Build phase constructs
+    Add the first stage Source to the pipeline
+    */
+    packagePipeline.addStage({
+      stageName: 'Source',
+      actions: [sourceAction],
+    });
+
+    /*
+    Define a code build container's environment
     */
     const codeBuildEnvironment = {
       computeType: codebuild.ComputeType.SMALL,
       image: codebuild.LinuxBuildImage.AMAZON_LINUX_2_3,
     };
 
+    /*
+    Provide a code build container's build specifications
+    This BuildSpec installs the libraries for building pip packages
+    The output artifacts are located in the container's ./dist directory
+    */
     const buildBuildSpec = {
       version: '0.2',
       phases: {
@@ -161,7 +116,6 @@ export class MultiRegionPackagePublishingPipelineStack extends Stack {
             'echo Build started on `date`',
             'ls',
             'python3 -m build',
-            //python3 ./src/setup.py bdist_wheel',
           ],
           finally: ['ls ./dist'],
         },
@@ -172,6 +126,9 @@ export class MultiRegionPackagePublishingPipelineStack extends Stack {
       artifacts: { files: ['dist/*'] },
     };
 
+    /*
+    Define a CodeBuild Project for the CodePipeline Pipeline with above buildspec, environment, and encryption key
+    */
     const packageBuildProject = new codebuild.PipelineProject(
       this,
       `CustomPackageCodeBuildProject`,
@@ -182,8 +139,11 @@ export class MultiRegionPackagePublishingPipelineStack extends Stack {
       }
     );
 
+    /*
+    Create buildOutput artifact to track the package created the /dist directory
+    Define the buildAction for within the codePipeline's build stage
+    */
     const buildOutput = new codepipeline.Artifact();
-
     const buildAction = new codepipeline_actions.CodeBuildAction({
       actionName: 'BuildPackage',
       project: packageBuildProject,
@@ -192,7 +152,18 @@ export class MultiRegionPackagePublishingPipelineStack extends Stack {
     });
 
     /*
-    Create the pipeline's publish phase constructs
+    Add the second stage Build to the pipeline
+    */
+    packagePipeline.addStage({
+      stageName: 'BuildPackage',
+      actions: [buildAction],
+    });
+
+    /*
+    Provide a CodeBuild container's build specifications for publishing
+    This BuildSpec installs the libraries and command line tools for aws and twine
+    The build phase logs in to the CodeArtifact and uploads the package through twine
+    The output artifacts are located in the container's ./dist directory
     */
     const publishBuildSpec = {
       version: '0.2',
@@ -225,52 +196,68 @@ export class MultiRegionPackagePublishingPipelineStack extends Stack {
           command: ['echo Package Publishing completed on `date`'],
         },
       },
-      artifacts: { files: ['dist/*'] },
     };
 
+    /*
+    Define a CodeBuild Project for the CodePipeline Pipeline 
+    Use above buildspec, environment, and encryption key for codebuild environment
+    Add environment variables to reference in codebuild container
+    */
     const publishPackageProject = new codebuild.PipelineProject(
       this,
       `PublishPackageProject`,
       {
         buildSpec: codebuild.BuildSpec.fromObject(publishBuildSpec),
-        environmentVariables: {
-          domainName: { value: params.domainName },
-          repositoryName: {
-            value: params.repositoryName,
-          },
-          domainOwner: { value: params.accountId },
-          region: { value: params.primaryRegion },
-        },
         environment: codeBuildEnvironment,
         encryptionKey,
+        environmentVariables: {
+          domainName: { value: props.domainName },
+          repositoryName: {
+            value: props.repositoryName,
+          },
+          domainOwner: { value: accountId },
+          region: { value: props.primaryRegion },
+        },
       }
     );
 
-    const publishPrimaryAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'PublishPrimaryRegion',
-      project: publishPackageProject,
-      input: buildOutput,
-      runOrder: 1,
-    });
-
-    const publishReplicaActions = [];
-    for (var replicaRegion of params.replicaRegions) {
-      const publishReplicaAction = new codepipeline_actions.CodeBuildAction({
-        actionName: `PublishReplicaRegion-${replicaRegion}`,
+    /*
+    Create all publish actions to publish to all CodeArtifact regions
+    Use above buildspec, environment, and encryption key for codebuild environment
+    Add environment variables to reference in codebuild container
+    */
+    const publishActions = [];
+    for (var region of [...props.replicaRegions, props.primaryRegion]) {
+      const publishToRegionAction = new codepipeline_actions.CodeBuildAction({
+        actionName: `PublishToRegion-${region}`,
         project: publishPackageProject,
         input: buildOutput,
         environmentVariables: {
           region: {
-            value: replicaRegion,
+            value: region,
           },
         },
         runOrder: 1,
       });
-      publishReplicaActions.push(publishReplicaAction);
+      publishActions.push(publishToRegionAction);
     }
 
-    //allow the role for this phase's codebuild project to publish to codeartifact
-    const CodeArtifactAccessPolicy = new iam.Policy(
+    /*
+    Add the final stage Publish to the pipeline
+    All publish actions will run in parallel to publish the package to CodeArtifact Repos in each region
+    */
+    packagePipeline.addStage({
+      stageName: 'Publish',
+      actions: publishActions,
+    });
+
+    /*
+    Derive all necessary Arn's for codeArtifact resources to be used for access policy below
+    */
+    const codeArtifactArns = GenerateCodeArtifactArns(props, this);
+
+    //Attach a new policy to the pipeline' publishing codebuild role to access the multi-region code artifact resources
+    const codeArtifactAccessPolicy = new iam.Policy(
       this,
       'CodeArtifactAccessPolicy',
       {
@@ -297,77 +284,20 @@ export class MultiRegionPackagePublishingPipelineStack extends Stack {
     );
 
     /*
-    Create the multi region private pip package publishing pipeline
+    Output the URL in the CloudFormation Outputs tab for easier access to view the pipeline
     */
-    const packagePipeline = new codepipeline.Pipeline(this, 'PackagePipeline', {
-      pipelineName: 'packagePipeline',
-      artifactBucket,
-      stages: [
-        {
-          stageName: 'Source',
-          actions: [sourceAction],
-        },
-        {
-          stageName: 'Build',
-          actions: [buildAction],
-        },
-        {
-          stageName: 'Publish',
-          actions: [publishPrimaryAction, ...publishReplicaActions],
-        },
-      ],
-    });
-
     new CfnOutput(this, 'CodePipelineURL', {
-      value: `https://${params.primaryRegion}.console.aws.amazon.com/codesuite/codepipeline/pipelines/${packagePipeline.pipelineName}/view`,
+      value: `https://${props.primaryRegion}.console.aws.amazon.com/codesuite/codepipeline/pipelines/${packagePipeline.pipelineName}/view`,
     });
 
-    /* 
-    Add CDK Nag suppressions for this project 
+    /*
+    Add suppressions to the CDK-Nag Aspects evaluation with justified reasons
     */
-    NagSuppressions.addResourceSuppressions(
+    MyNagSuppressions({
       packageBuildProject,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason:
-            'CustomPackageBuildProject is an L3 Construct (aws_codebuild.PipelineProject) that orchestrates several IAM Roles/Policies. All wildcards are deeply prefixed',
-        },
-      ],
-      true
-    );
-    NagSuppressions.addResourceSuppressions(
       publishPackageProject,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason:
-            'PublishPackageProject is an L3 Construct (aws_codebuild.PipelineProject) that orchestrates several IAM Roles/Policies. All wildcards are deeply prefixed',
-        },
-      ],
-      true
-    );
-    NagSuppressions.addResourceSuppressions(
       packagePipeline,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason:
-            'PackagePipeline Resources use default policies that allow S3 and KMS actions',
-        },
-      ],
-      true
-    );
-    NagSuppressions.addResourceSuppressions(
-      CodeArtifactAccessPolicy,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason:
-            'Only allows access to the 2 CodeArtifact Repository Resources',
-        },
-      ],
-      true
-    );
+      codeArtifactAccessPolicy,
+    });
   }
 }
